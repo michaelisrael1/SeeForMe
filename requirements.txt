@@ -1,0 +1,7 @@
+numpy
+opencv-python
+torch
+ultralytics
+Pillow
+pyttsx3
+schedule
