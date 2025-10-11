@@ -1,4 +1,4 @@
-import numpy as np
+from numpy import ndarray
 import cv2 as cv
 import torch
 from ultralytics import YOLO
@@ -6,10 +6,15 @@ from PIL import Image
 import pyttsx3
 import schedule
 import os
-
+import boto3
+import base64
+from image import RekognitionImage
+from pprint import pprint
 # os.system("/usr/bin/espeak-ng ' '")
 
 engine = pyttsx3.init(driverName='espeak')
+client = boto3.client('rekognition')
+
 
 global identified_objects
 identified_objects = []
@@ -27,24 +32,21 @@ def textToSpeech():
             identified[seen] += 1
             continue
         identified[seen] = 1
-    
+
     for key, value in identified.items():
         announcement = f'I see {value} {key}'
         engine.say(announcement)
         engine.runAndWait()
 
-    # announcement = f'I see a {identified_objects[0]}'
-    # engine.say(announcement)
-    # engine.runAndWait()
 
-schedule.every(3).seconds.do(textToSpeech)
-    
+schedule.every(.5).seconds.do(textToSpeech)
 
-FRAME_SKIP = 5 
+
+FRAME_SKIP = 60
 frame_counter = 0
 
-model = YOLO("yolov5x.pt")
-model.cuda()
+# model = YOLO("yolov5x.pt")
+# model.cuda()
 
 cap = cv.VideoCapture(0)
 if not cap.isOpened():
@@ -53,9 +55,11 @@ if not cap.isOpened():
 
 print("Press 'q' in the video window to quit.")
 
-while True:
+test = 0
+
+while test <= 10:
     ret, frame = cap.read()
-    
+
     if not ret:
         print("Can't receive frame (stream end?). Exiting ...")
         break
@@ -63,28 +67,31 @@ while True:
     schedule.run_pending()
 
     # --- Display the live video stream ---
-    # cv.imshow('Live Frame', frame)
-    
+    cv.imshow('Live Frame', frame)
+
     if cv.waitKey(1) == ord('q'):
         break
-        
+
     # --- Model Processing Logic (every N frames) ---
-    if frame_counter % FRAME_SKIP == 0:
+    # if frame_counter % FRAME_SKIP == 0:
+    if test == 10:
+        identified_objects = []
 
-        results = model(frame, verbose=False)
-        identified_objects = [] 
-        
-        for result in results:
-            identified_objects = [result.names[cls.item()] for cls in result.boxes.cls.int()]  # class name of each box
-        
-        
-        annotated_frame = results[0].plot()
-
-        # Display the annotated frame
-        cv.imshow("YOLO Results", annotated_frame)
-    
+        success, buffer = cv.imencode('.jpg', frame)
+        print(f'Converting frame to jpg')
+        if success:
+            img = buffer.tobytes()
+            image_obj = RekognitionImage(
+                {'Bytes': img}, f"Frame {test}", client)
+            labels = image_obj.detect_labels(max_labels=10, min_confidence=55)
+            for label in labels:
+                identified_objects.append(label['Name'])
+            textToSpeech()
+    # Display the annotated frame
+    # cv.imshow("YOLO Results", annotated_frame)
+    test += 1
     frame_counter += 1
-    
 
-cap.release()
+
+# cap.release()
 cv.destroyAllWindows()
