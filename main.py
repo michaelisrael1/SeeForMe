@@ -10,17 +10,17 @@ import boto3
 import base64
 from image import RekognitionImage
 from pprint import pprint
+import requests
+import json
 # os.system("/usr/bin/espeak-ng ' '")
 
 engine = pyttsx3.init(driverName='espeak')
 client = boto3.client('rekognition')
 
-
-global identified_objects
-identified_objects = []
+SERVER_URL = "http://127.0.0.1:5000/detect/"
 
 
-def textToSpeech():
+def textToSpeech(identified_objects):
     if len(identified_objects) == 0:
         return
     print(identified_objects)
@@ -39,7 +39,28 @@ def textToSpeech():
         engine.runAndWait()
 
 
-schedule.every(.5).seconds.do(textToSpeech)
+def send_to_AWS(img_bytes):
+    identified_objects = []
+    image_obj = RekognitionImage(
+        {'Bytes': img_bytes}, f"Frame {test}", client)
+    labels = image_obj.detect_labels(max_labels=10, min_confidence=55)
+    for label in labels:
+        identified_objects.append(label['Name'])
+    return identified_objects
+
+
+def send_to_local_api(img_bytes):
+    files = {'file': ('image.jpg', img_bytes, 'image/jpeg')}
+    response = requests.post(SERVER_URL, files=files, timeout=30)
+    pprint(response.json())
+    return
+
+
+def get_encode_image(frame):
+    success, buffer = cv.imencode('.jpg', frame)
+    print('Converting frame to jpg')
+    if success:
+        return buffer.tobytes()
 
 
 FRAME_SKIP = 60
@@ -64,8 +85,6 @@ while test <= 10:
         print("Can't receive frame (stream end?). Exiting ...")
         break
 
-    schedule.run_pending()
-
     # --- Display the live video stream ---
     cv.imshow('Live Frame', frame)
 
@@ -75,18 +94,11 @@ while test <= 10:
     # --- Model Processing Logic (every N frames) ---
     # if frame_counter % FRAME_SKIP == 0:
     if test == 10:
-        identified_objects = []
-
-        success, buffer = cv.imencode('.jpg', frame)
-        print(f'Converting frame to jpg')
-        if success:
-            img = buffer.tobytes()
-            image_obj = RekognitionImage(
-                {'Bytes': img}, f"Frame {test}", client)
-            labels = image_obj.detect_labels(max_labels=10, min_confidence=55)
-            for label in labels:
-                identified_objects.append(label['Name'])
-            textToSpeech()
+        # labels = send_to_AWS(frame)
+        img_bytes = get_encode_image(frame)
+        # detected = send_to_AWS(img_bytes)
+        # textToSpeech(detected)
+        send_to_local_api(img_bytes)
     # Display the annotated frame
     # cv.imshow("YOLO Results", annotated_frame)
     test += 1
