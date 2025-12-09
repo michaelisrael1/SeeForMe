@@ -15,28 +15,28 @@ import json
 # os.system("/usr/bin/espeak-ng ' '")
 
 engine = pyttsx3.init(driverName='espeak')
-client = boto3.client('rekognition')
+client = boto3.client('rekognition', region_name='us-east-2')
 
 SERVER_URL = "http://127.0.0.1:5000/detect/"
 
 
-def textToSpeech(identified_objects):
-    if len(identified_objects) == 0:
-        return
-    print(identified_objects)
+# def textToSpeech(identified_objects):
+#     if len(identified_objects) == 0:
+#         return
+#     print(identified_objects)
 
-    identified = {}
+#     identified = {}
 
-    for seen in identified_objects:
-        if seen in identified:
-            identified[seen] += 1
-            continue
-        identified[seen] = 1
+#     for seen in identified_objects:
+#         if seen in identified:
+#             identified[seen] += 1
+#             continue
+#         identified[seen] = 1
 
-    for key, value in identified.items():
-        announcement = f'I see {value} {key}'
-        engine.say(announcement)
-        engine.runAndWait()
+#     for key, value in identified.items():
+#         announcement = f'I see {value} {key}'
+#         engine.say(announcement)
+#         engine.runAndWait()
 
 
 def send_to_AWS(img_bytes):
@@ -46,6 +46,7 @@ def send_to_AWS(img_bytes):
     labels = image_obj.detect_labels(max_labels=10, min_confidence=55)
     for label in labels:
         identified_objects.append(label['Name'])
+    pprint(identified_objects)
     return identified_objects
 
 
@@ -58,7 +59,7 @@ def send_to_local_api(img_bytes):
 
 def get_encode_image(frame):
     success, buffer = cv.imencode('.jpg', frame)
-    print('Converting frame to jpg')
+    # print('Converting frame to jpg')
     if success:
         return buffer.tobytes()
 
@@ -78,7 +79,7 @@ print("Press 'q' in the video window to quit.")
 
 test = 0
 
-while test <= 10:
+while True:
     ret, frame = cap.read()
 
     if not ret:
@@ -93,12 +94,13 @@ while test <= 10:
 
     # --- Model Processing Logic (every N frames) ---
     # if frame_counter % FRAME_SKIP == 0:
-    if test == 10:
+    if frame_counter % FRAME_SKIP == 0:
         # labels = send_to_AWS(frame)
         img_bytes = get_encode_image(frame)
         # detected = send_to_AWS(img_bytes)
         # textToSpeech(detected)
         send_to_local_api(img_bytes)
+        # textToSpeech(img_bytes)
     # Display the annotated frame
     # cv.imshow("YOLO Results", annotated_frame)
     test += 1
